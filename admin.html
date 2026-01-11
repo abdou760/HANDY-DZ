@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>لوحة إدارة المهنيين – HandyDZ</title>
+<style>
+body {font-family:'Cairo',sans-serif;background:#f8f8f8;margin:0;padding:0;}
+header {background:#1E3A8A;color:white;text-align:center;padding:15px;font-size:1.5rem;}
+.container {max-width:1100px;margin:20px auto;background:white;padding:20px;border-radius:10px;box-shadow:0 2px 6px rgba(0,0,0,0.1);overflow-x:auto;}
+table {width:100%;border-collapse: collapse;margin-top:10px;}
+th, td {padding:12px;border:1px solid #ccc;text-align:center;}
+th {background:#1E3A8A;color:white;}
+button {padding:6px 12px;margin:2px;border:none;border-radius:5px;cursor:pointer;color:white;}
+.activate {background:#22C55E;}
+.reject {background:#EF4444;}
+.whatsapp {background:#25D366;}
+.filter-btn {background:#3B82F6;margin-right:5px;}
+.active-status {color:#22C55E;font-weight:bold;}
+.expired-status {color:#EF4444;font-weight:bold;}
+.rejected-status {color:#888;font-weight:bold;}
+</style>
+</head>
+<body>
+
+<header>لوحة إدارة المهنيين – HandyDZ</header>
+
+<div class="container">
+<!-- أزرار الفلترة -->
+<div>
+  <button class="filter-btn" onclick="setFilter('all')">الكل</button>
+  <button class="filter-btn" onclick="setFilter('active')">نشط</button>
+  <button class="filter-btn" onclick="setFilter('expired')">منتهٍ</button>
+  <button class="filter-btn" onclick="setFilter('rejected')">مرفوض</button>
+</div>
+
+<table>
+<thead>
+<tr>
+<th>الاسم</th>
+<th>الهاتف</th>
+<th>المهنة</th>
+<th>الولاية</th>
+<th>الاشتراك</th>
+<th>رقم العملية</th>
+<th>الحالة</th>
+<th>الوقت المتبقي</th>
+<th>الإجراءات</th>
+</tr>
+</thead>
+<tbody id="prosTable"></tbody>
+</table>
+</div>
+
+<script>
+let notifiedExpired = {}; 
+let currentFilter = 'all'; // قيمة الفلتر الحالية
+
+function setFilter(filter){
+  currentFilter = filter;
+  loadProfessionals();
+}
+
+function loadProfessionals() {
+  let pros = JSON.parse(localStorage.getItem('professionals') || '[]');
+  const tbody = document.getElementById('prosTable');
+  tbody.innerHTML = '';
+
+  pros.forEach((pro, index) => {
+    let remaining = '-';
+    let statusClass = '';
+    const now = new Date();
+
+    if(pro.subscription.status === 'active'){
+      const endTime = new Date(pro.subscription.end_at);
+      const diff = endTime - now;
+      if(diff > 0){
+        const hours = Math.floor(diff / 1000 / 60 / 60);
+        const minutes = Math.floor((diff / 1000 / 60) % 60);
+        const seconds = Math.floor((diff / 1000) % 60);
+        remaining = `${hours}س ${minutes}د ${seconds}ث`;
+        statusClass = 'active-status';
+      } else {
+        pro.subscription.status = 'expired';
+        remaining = 'انتهى';
+        statusClass = 'expired-status';
+
+        if(!notifiedExpired[pro.phone]){
+          alert(`⚠️ انتهى اشتراك المهني: ${pro.name} (${pro.service})`);
+          const phoneNum = pro.phone.replace(/^0/, '');
+          const waLink = `https://wa.me/213${phoneNum}?text=${encodeURIComponent("مرحباً "+pro.name+"، انتهى اشتراكك في HandyDZ.")}`;
+          window.open(waLink, "_blank");
+          notifiedExpired[pro.phone] = true;
+        }
+      }
+    }
+
+    if(pro.subscription.status === 'rejected') {
+      statusClass = 'rejected-status';
+      remaining = '-';
+    }
+
+    // فلترة حسب الحالة
+    if(currentFilter === 'all' || currentFilter === pro.subscription.status){
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${pro.name}</td>
+        <td>${pro.phone}</td>
+        <td>${pro.service}</td>
+        <td>${pro.city}</td>
+        <td>${pro.subscription.plan}</td>
+        <td>${pro.subscription.transaction}</td>
+        <td class="${statusClass}">${pro.subscription.status}</td>
+        <td>${remaining}</td>
+        <td>
+          <button class="activate" onclick="activate(${index})">تفعيل</button>
+          <button class="reject" onclick="reject(${index})">رفض</button>
+          <button class="whatsapp" onclick="sendWhatsApp(${index})">واتساب</button>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    }
+  });
+
+  localStorage.setItem('professionals', JSON.stringify(pros));
+}
+
+function activate(index){
+  const pros = JSON.parse(localStorage.getItem('professionals') || '[]');
+  const plan = pros[index].subscription.plan;
+  const now = new Date();
+
+  let durationMs = 0;
+  if(plan === 'basic') durationMs = 30*24*60*60*1000;
+  if(plan === 'pro') durationMs = 90*24*60*60*1000;
+  if(plan === 'premium') durationMs = 365*24*60*60*1000;
+
+  pros[index].subscription.status = 'active';
+  pros[index].subscription.end_at = new Date(now.getTime() + durationMs).toISOString();
+
+  localStorage.setItem('professionals', JSON.stringify(pros));
+  loadProfessionals();
+  sendWhatsApp(index, true);
+}
+
+function reject(index){
+  const pros = JSON.parse(localStorage.getItem('professionals') || '[]');
+  pros[index].subscription.status = 'rejected';
+  localStorage.setItem('professionals', JSON.stringify(pros));
+  loadProfessionals();
+}
+
+function sendWhatsApp(index, activated=false){
+  const pros = JSON.parse(localStorage.getItem('professionals') || '[]');
+  const pro = pros[index];
+  const phoneNum = pro.phone.replace(/^0/, '');
+  let text = activated
+    ? `مرحباً ${pro.name}، تم تفعيل اشتراكك في HandyDZ. يمكنك البدء باستخدام الخدمة الآن.`
+    : `مرحباً ${pro.name}، هذه رسالة من إدارة HandyDZ.`;
+  const waLink = `https://wa.me/213${phoneNum}?text=${encodeURIComponent(text)}`;
+  window.open(waLink, "_blank");
+}
+
+setInterval(loadProfessionals, 1000);
+loadProfessionals();
+</script>
+
+</body>
+</html>

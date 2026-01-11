@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>قائمة الزبائن – HandyDZ</title>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+  body { font-family: 'Cairo', sans-serif; background: #f8f8f8; margin:0; padding:0;}
+  header { background: #1E3A8A; color:white; padding: 15px; text-align: center; font-size: 1.5rem; }
+  .nav { text-align:center; margin:15px 0; }
+  .nav a { margin:0 10px; color:#1E3A8A; text-decoration:none; font-weight:bold; }
+  .container { padding:20px; max-width:1000px; margin:auto; background:white; border-radius:10px; box-shadow:0 2px 6px rgba(0,0,0,0.1); }
+  input { padding:10px; margin-bottom:10px; width:100%; max-width:300px; border-radius:5px; border:1px solid #ccc; }
+  table { width:100%; border-collapse: collapse; margin-top:15px; }
+  th, td { border:1px solid #ccc; padding:10px; text-align:right; }
+  th { background:#1E3A8A; color:white; }
+  tr:nth-child(even) { background:#f2f2f2; }
+  canvas { margin-top:30px; }
+  button { padding:10px 20px; margin-top:10px; border:none; border-radius:5px; cursor:pointer; background:#22C55E; color:white; font-weight:bold; }
+  button:hover { background:#1aa34a; }
+</style>
+</head>
+<body>
+
+<header>قائمة الزبائن – HandyDZ</header>
+
+<div class="nav">
+  <a href="index.html">🏠 الرئيسية</a>
+  <a href="search.html">🔍 البحث عن خدمة</a>
+  <a href="register-professional.html">🧑‍🔧 تسجيل مهني</a>
+</div>
+
+<div class="container">
+  <input type="text" id="searchInput" placeholder="ابحث بالاسم أو المهني أو نوع الاتصال..." oninput="displayCustomers()">
+  <button onclick="exportCSV()">📥 تصدير Excel</button>
+
+  <table id="customersTable">
+    <thead>
+      <tr>
+        <th>اسم الزبون</th>
+        <th>رقم الهاتف</th>
+        <th>اسم المهني</th>
+        <th>رقم المهني</th>
+        <th>نوع الاتصال</th>
+        <th>تاريخ التفاعل</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <canvas id="barChart" height="150"></canvas>
+  <canvas id="pieChart" height="150"></canvas>
+</div>
+
+<script>
+// جلب المهنيين والزبائن
+function getProfessionals() {
+  return JSON.parse(localStorage.getItem('professionals') || '[]');
+}
+function getCustomers() {
+  return JSON.parse(localStorage.getItem('customers') || '[]');
+}
+
+// البحث والتصفية
+function displayCustomers(){
+  const tbody = document.querySelector('#customersTable tbody');
+  const search = document.getElementById('searchInput').value.trim().toLowerCase();
+  tbody.innerHTML = '';
+  const customers = getCustomers();
+  const professionals = getProfessionals();
+
+  const filtered = customers.filter(c=>{
+    const pro = professionals.find(p=>p.phone===c.proPhone);
+    const proName = pro ? pro.name : c.proPhone;
+    return (
+      c.customerName.toLowerCase().includes(search) ||
+      proName.toLowerCase().includes(search) ||
+      c.contactType.toLowerCase().includes(search)
+    );
+  });
+
+  if(filtered.length===0){
+    tbody.innerHTML='<tr><td colspan="6" style="text-align:center;">لا توجد بيانات</td></tr>';
+  } else {
+    filtered.forEach(c=>{
+      const pro = professionals.find(p=>p.phone===c.proPhone);
+      const proName = pro ? pro.name : '-';
+      const proPhone = c.proPhone;
+      const row = document.createElement('tr');
+      row.innerHTML = `
+        <td>${c.customerName}</td>
+        <td>${c.customerPhone}</td>
+        <td>${proName}</td>
+        <td>${proPhone}</td>
+        <td>${c.contactType}</td>
+        <td>${c.date}</td>
+      `;
+      tbody.appendChild(row);
+    });
+  }
+
+  updateCharts(filtered, professionals);
+}
+
+// تصدير CSV
+function exportCSV(){
+  const customers = getCustomers();
+  if(customers.length===0){ alert('لا توجد بيانات للتصدير'); return; }
+  const professionals = getProfessionals();
+  let csvContent = "data:text/csv;charset=utf-8,";
+  csvContent += "اسم الزبون,رقم الهاتف,اسم المهني,رقم المهني,نوع الاتصال,تاريخ التفاعل\n";
+  customers.forEach(c=>{
+    const pro = professionals.find(p=>p.phone===c.proPhone);
+    const proName = pro ? pro.name : '-';
+    csvContent += [c.customerName,c.customerPhone,proName,c.proPhone,c.contactType,c.date].join(",") + "\n";
+  });
+  const encodedUri = encodeURI(csvContent);
+  const link = document.createElement("a");
+  link.setAttribute("href",encodedUri);
+  link.setAttribute("download","HandyDZ_Customers.csv");
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+// تحديث الرسوم البيانية
+let barChartInstance = null;
+let pieChartInstance = null;
+function updateCharts(customers, professionals){
+  // عد الاتصالات لكل مهني
+  const counts = {};
+  professionals.forEach(p=>counts[p.name]=0);
+  customers.forEach(c=>{
+    const pro = professionals.find(p=>p.phone===c.proPhone);
+    if(pro) counts[pro.name]++;
+  });
+  const barLabels = Object.keys(counts);
+  const barData = Object.values(counts);
+
+  // رسم الأعمدة
+  const barCtx = document.getElementById('barChart').getContext('2d');
+  if(barChartInstance) barChartInstance.destroy();
+  barChartInstance = new Chart(barCtx,{
+    type:'bar',
+    data:{
+      labels:barLabels,
+      datasets:[{
+        label:'عدد الاتصالات لكل مهني',
+        data:barData,
+        backgroundColor:'#1E3A8A'
+      }]
+    },
+    options:{
+      responsive:true,
+      plugins:{legend:{display:false}}
+    }
+  });
+
+  // الدائرة النسبية للاتصال
+  const contactCounts = {call:0, chat:0};
+  customers.forEach(c=>{ if(c.contactType==='call') contactCounts.call++; else contactCounts.chat++; });
+  const pieCtx = document.getElementById('pieChart').getContext('2d');
+  if(pieChartInstance) pieChartInstance.destroy();
+  pieChartInstance = new Chart(pieCtx,{
+    type:'pie',
+    data:{
+      labels:['Call','WhatsApp'],
+      datasets:[{
+        data:[contactCounts.call, contactCounts.chat],
+        backgroundColor:['#1E3A8A','#22C55E']
+      }]
+    },
+    options:{responsive:true}
+  });
+}
+
+// عرض عند تحميل الصفحة
+document.addEventListener('DOMContentLoaded', displayCustomers);
+</script>
+
+</body>
+</html>

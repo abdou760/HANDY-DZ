@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HandyDZ – أقرب خدمة ليك</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700&family=Poppins:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary-blue: #1E3A8A;
+      --secondary-green: #22C55E;
+      --white: #ffffff;
+      --font-ar: 'Cairo', sans-serif;
+    }
+
+    * { margin:0; padding:0; box-sizing:border-box; }
+
+    body {
+      font-family: var(--font-ar);
+      /* خلفية من مجلد assets */
+      background-image: url('assets/background.jpg'); /* ضع صورتك هنا */
+      background-size: cover;        /* تغطي الشاشة بالكامل */
+      background-position: center;   /* تمركز الصورة */
+      background-repeat: no-repeat;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      padding: 20px;
+    }
+
+    .container {
+      background-color: rgba(255, 255, 255, 0.9); /* خلفية شبه شفافة للحفاظ على وضوح النص */
+      text-align: center;
+      padding: 20px;
+      width: 100%;
+      max-width: 400px;
+      border: 2px solid var(--primary-blue);
+      border-radius: 15px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+
+    .logo { font-size: 2rem; font-weight: bold; color: var(--primary-blue); margin-bottom: 5px; }
+    .slogan { font-size: 1.1rem; color: var(--secondary-green); margin-bottom: 30px; }
+
+    .btn { display:block; width:100%; padding:15px 0; margin-bottom:15px; font-size:1rem; font-weight:bold; border:none; border-radius:10px; cursor:pointer; transition:0.3s; color: var(--white); }
+    .btn-search { background-color: var(--primary-blue); }
+    .btn-search:hover { background-color:#15296e; }
+    .btn-professional { background-color: var(--secondary-green); }
+    .btn-professional:hover { background-color:#1aa34a; }
+
+    @media (max-width: 500px) {
+      .container { padding: 15px; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <div class="logo">HandyDZ</div>
+  <div class="slogan">أقرب خدمة ليك</div>
+
+  <button class="btn btn-search" onclick="goToSearch()">🔍 ابحث عن خدمة</button>
+  <button class="btn btn-professional" onclick="goToProfessional()">🧑‍🔧 أنا مهني</button>
+</div>
+
+<script>
+  function goToSearch() {
+    // الرابط لصفحة نتائج البحث
+    window.location.href = 'search.html';
+  }
+  function goToProfessional() {
+    // الرابط لصفحة تسجيل المهني
+    window.location.href = 'register-professional.html';
+  }
+</script>
+
+</body>
+</html>
