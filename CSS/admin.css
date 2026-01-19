@@ -1,0 +1,80 @@
+:root {
+  --font-ar: 'Cairo', sans-serif;
+  --primary-blue: #1E3A8A;
+}
+
+body {
+  font-family: var(--font-ar);
+  background-image: url('assets/background.jpg'); 
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+}
+
+.container {
+  background-color: rgba(255, 255, 255, 0.85);
+  text-align: center;
+  padding: 20px;
+  width: 100%;
+  max-width: 1100px;
+  border: 2px solid var(--primary-blue);
+  border-radius: 15px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+  overflow-x: auto;
+}
+
+header {
+  background: var(--primary-blue);
+  color: white;
+  text-align: center;
+  padding: 15px;
+  font-size: 1.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-radius: 10px 10px 0 0;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 10px;
+}
+
+th, td {
+  padding: 12px;
+  border: 1px solid #ccc;
+  text-align: center;
+}
+
+th {
+  background: var(--primary-blue);
+  color: white;
+}
+
+button {
+  padding: 6px 12px;
+  margin: 2px;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  color: white;
+}
+
+.activate { background:#22C55E; }
+.reject { background:#EF4444; }
+.whatsapp { background:#25D366; }
+.filter-btn { background:#3B82F6; margin-right:5px; }
+.customers-btn { background:#F59E0B; }
+.logout-btn { background:#DC2626; }
+
+.active-status { color:#22C55E; font-weight:bold; }
+.expired-status { color:#EF4444; font-weight:bold; }
+.rejected-status { color:#888; font-weight:bold; }
+.pending-status { color:#F59E0B; font-weight:bold; }

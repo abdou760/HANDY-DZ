@@ -1,0 +1,23 @@
+body {
+  font-family: var(--font-ar);
+  background-image: url('assets/background.jpg'); /* رابط الصورة */
+  background-size: cover;          /* تغطي كامل الشاشة */
+  background-position: center;     /* تمركز الصورة */
+  background-repeat: no-repeat;    /* لا تكرر الصورة */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  padding: 20px;
+}
+
+.container {
+  background-color: rgba(255, 255, 255, 0.85); /* شبه شفافة لتسهيل القراءة */
+  text-align: center;
+  padding: 20px;
+  width: 100%;
+  max-width: 400px;
+  border: 2px solid var(--primary-blue);
+  border-radius: 15px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+}

@@ -4,191 +4,46 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>لوحة إدارة المهنيين – HandyDZ</title>
-<style>
-body {font-family:'Cairo',sans-serif;background:#f8f8f8;margin:0;padding:0; overflow: hidden;}
-header {background:#1E3A8A;color:white;text-align:center;padding:15px;font-size:1.5rem;}
-.container {max-width:1100px;margin:20px auto;background:white;padding:20px;border-radius:10px;box-shadow:0 2px 6px rgba(0,0,0,0.1);overflow-x:auto;}
-table {width:100%;border-collapse: collapse;margin-top:10px;}
-th, td {padding:12px;border:1px solid #ccc;text-align:center;}
-th {background:#1E3A8A;color:white;}
-button {padding:6px 12px;margin:2px;border:none;border-radius:5px;cursor:pointer;color:white;}
-.activate {background:#22C55E;}
-.reject {background:#EF4444;}
-.whatsapp {background:#25D366;}
-.filter-btn {background:#3B82F6;margin-right:5px;}
-.active-status {color:#22C55E;font-weight:bold;}
-.expired-status {color:#EF4444;font-weight:bold;}
-.rejected-status {color:#888;font-weight:bold;}
-.pending-status {color:#F59E0B;font-weight:bold;}
-#authScreen {
-  position: fixed; top:0; left:0; width:100%; height:100%;
-  background: #1E3A8A; color: white; display: flex;
-  flex-direction: column; justify-content: center; align-items: center;
-  z-index: 9999;
-}
-#authScreen input {
-  padding: 10px; margin: 10px; width: 250px; border-radius: 5px; border: none;
-}
-#authScreen button {
-  background: #3B82F6; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer;
-}
-</style>
+<link rel="stylesheet" href="css/admin.css">
 </head>
 <body>
 
-<div id="authScreen">
-  <h2>🔒 لوحة الإدارة – HandyDZ</h2>
-  <input type="password" id="passwordInput" placeholder="أدخل كلمة المرور" autocomplete="off">
-  <button onclick="verifyPassword()">دخول</button>
-  <p id="authMessage" style="color: #ffcc00; margin-top: 10px;"></p>
-</div>
-
-<header>لوحة إدارة المهنيين – HandyDZ</header>
-
 <div class="container" id="mainContent" style="display:none;">
+
+  <!-- زر تسجيل الخروج يظهر بعد الدخول -->
+  <div style="text-align:right; margin-bottom:10px;">
+    <button class="logout-btn" onclick="logout()">تسجيل خروج</button>
+  </div>
+
   <!-- أزرار الفلترة + زر العملاء -->
-  <div>
+  <div class="filters">
     <button class="filter-btn" onclick="setFilter('all')">الكل</button>
     <button class="filter-btn" onclick="setFilter('pending')">قيد المراجعة</button>
     <button class="filter-btn" onclick="setFilter('active')">نشط</button>
     <button class="filter-btn" onclick="setFilter('expired')">منتهٍ</button>
     <button class="filter-btn" onclick="setFilter('rejected')">مرفوض</button>
-    <button class="filter-btn" style="background:#F59E0B;" onclick="goToCustomers()">العملاء</button>
+    <button class="filter-btn customers-btn" onclick="goToCustomers()">العملاء</button>
   </div>
 
   <table>
     <thead>
       <tr>
-        <th>الاسم</th><th>الهاتف</th><th>المهنة</th><th>الولاية</th><th>الاشتراك</th>
-        <th>رقم العملية</th><th>الحالة</th><th>الوقت المتبقي</th><th>الإجراءات</th>
+        <th>الاسم</th>
+        <th>الهاتف</th>
+        <th>المهنة</th>
+        <th>الولاية</th>
+        <th>الاشتراك</th>
+        <th>رقم العملية</th>
+        <th>الحالة</th>
+        <th>الوقت المتبقي</th>
+        <th>الإجراءات</th>
       </tr>
     </thead>
     <tbody id="prosTable"></tbody>
   </table>
+
 </div>
 
-<script>
-/* ===== دوال تشفير آمنة ===== */
-async function deriveKey(password, salt) {
-  const enc = new TextEncoder();
-  const keyMaterial = await window.crypto.subtle.importKey(
-    "raw",
-    enc.encode(password),
-    { name: "PBKDF2" },
-    false,
-    ["deriveBits", "deriveKey"]
-  );
-  return await window.crypto.subtle.deriveKey(
-    { name: "PBKDF2", salt: salt, iterations: 100000, hash: "SHA-256" },
-    keyMaterial,
-    { name: "AES-GCM", length: 256 },
-    true,
-    ["encrypt", "decrypt"]
-  );
-}
-
-async function hashPassword(password) {
-  const salt = window.crypto.getRandomValues(new Uint8Array(16));
-  const key = await deriveKey(password, salt);
-  const exported = await window.crypto.subtle.exportKey("raw", key);
-  const hash = Array.from(new Uint8Array(exported)).map(b => b.toString(16).padStart(2, '0')).join('');
-  return { salt: Array.from(salt), hash };
-}
-
-async function verifyHash(password, stored) {
-  const salt = new Uint8Array(stored.salt);
-  const key = await deriveKey(password, salt);
-  const exported = await window.crypto.subtle.exportKey("raw", key);
-  const hash = Array.from(new Uint8Array(exported)).map(b => b.toString(16).padStart(2, '0')).join('');
-  return hash === stored.hash;
-}
-
-/* ===== التحقق من كلمة المرور ===== */
-async function verifyPassword() {
-  const input = document.getElementById("passwordInput").value;
-  if (!input) return;
-
-  const stored = localStorage.getItem("admin_auth");
-  let valid = false;
-
-  if (!stored) {
-    // أول مرة: إنشاء كلمة مرور
-    const confirm = prompt("تأكيد كلمة المرور:");
-    if (input !== confirm) {
-      showMessage("كلمتا المرور غير متطابقتين!", "error");
-      return;
-    }
-    const auth = await hashPassword(input);
-    localStorage.setItem("admin_auth", JSON.stringify(auth));
-    valid = true;
-  } else {
-    valid = await verifyHash(input, JSON.parse(stored));
-  }
-
-  if (valid) {
-    sessionStorage.setItem("admin_ok", "true");
-    document.getElementById("authScreen").style.display = "none";
-    document.getElementById("mainContent").style.display = "block";
-    startSessionTimeout();
-    loadProfessionals();
-  } else {
-    showMessage("كلمة المرور غير صحيحة!", "error");
-  }
-}
-
-function showMessage(text, type = "info") {
-  const msg = document.getElementById("authMessage");
-  msg.textContent = text;
-  msg.style.color = type === "error" ? "#ff6b6b" : "#a0d2eb";
-  setTimeout(() => msg.textContent = "", 3000);
-}
-
-/* ===== إنهاء الجلسة بعد 15 دقيقة عدم نشاط ===== */
-let sessionTimeout;
-function startSessionTimeout() {
-  clearTimeout(sessionTimeout);
-  sessionTimeout = setTimeout(() => {
-    alert("تم إنهاء جلستك بسبب عدم النشاط.");
-    sessionStorage.removeItem("admin_ok");
-    location.reload();
-  }, 15 * 60 * 1000); // 15 دقيقة
-
-  // تجديد الجلسة عند أي تفاعل
-  ['click', 'keypress', 'scroll'].forEach(event => {
-    document.addEventListener(event, () => startSessionTimeout(), { passive: true });
-  });
-}
-
-/* ===== باقي الدوال كما هي (بدون تغيير كبير) ===== */
-function normalizePhone(raw){
-  const digits = (raw || '').replace(/\D/g,'');
-  if(!digits) return '';
-  if(digits.startsWith('0')) return '213' + digits.slice(1);
-  if(digits.startsWith('213')) return digits;
-  if(digits.length === 8) return '213' + digits;
-  return digits;
-}
-
-// ... (باقي الدوال: goToCustomers, setFilter, loadProfessionals, activateByPhone, rejectByPhone, sendWhatsAppByPhone, sendExpiryMessage)
-
-// عند التحميل، تحقق من الجلسة
-window.addEventListener("load", () => {
-  if (sessionStorage.getItem("admin_ok") === "true") {
-    document.getElementById("authScreen").style.display = "none";
-    document.getElementById("mainContent").style.display = "block";
-    startSessionTimeout();
-    loadProfessionals();
-  }
-});
-
-// تحديث كل 60 ثانية
-setInterval(() => {
-  if (sessionStorage.getItem("admin_ok") === "true") loadProfessionals();
-}, 60000);
-
-// === دوال الإدارة (مثل loadProfessionals) تبقى كما هي ===
-// (يمكنك لصق باقي الكود من النسخة الأصلية هنا)
-</script>
-
+<script src="js/admin.js"></script>
 </body>
 </html>
