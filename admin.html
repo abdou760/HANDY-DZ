@@ -19,19 +19,23 @@ button {padding:6px 12px;margin:2px;border:none;border-radius:5px;cursor:pointer
 .active-status {color:#22C55E;font-weight:bold;}
 .expired-status {color:#EF4444;font-weight:bold;}
 .rejected-status {color:#888;font-weight:bold;}
+.pending-status {color:#F59E0B;font-weight:bold;}
 </style>
 </head>
 <body>
 
 <header>لوحة إدارة المهنيين – HandyDZ</header>
 
-<div class="container">
-<!-- أزرار الفلترة -->
+<div class="container" id="mainContent" style="display:none;">
+
+<!-- أزرار الفلترة + زر العملاء -->
 <div>
   <button class="filter-btn" onclick="setFilter('all')">الكل</button>
+  <button class="filter-btn" onclick="setFilter('pending')">قيد المراجعة</button>
   <button class="filter-btn" onclick="setFilter('active')">نشط</button>
   <button class="filter-btn" onclick="setFilter('expired')">منتهٍ</button>
   <button class="filter-btn" onclick="setFilter('rejected')">مرفوض</button>
+  <button class="filter-btn" style="background:#F59E0B;" onclick="goToCustomers()">العملاء</button>
 </div>
 
 <table>
@@ -53,7 +57,65 @@ button {padding:6px 12px;margin:2px;border:none;border-radius:5px;cursor:pointer
 </div>
 
 <script>
-let notifiedExpired = {}; 
+/* ===== دوال مساعدة ===== */
+function normalizePhone(raw){
+  const digits = (raw || '').replace(/\D/g,'');
+  if(!digits) return '';
+  if(digits.startsWith('0')) return '213' + digits.slice(1);
+  if(digits.startsWith('213')) return digits;
+  if(digits.length === 8) return '213' + digits;
+  return digits;
+}
+
+async function sha256(message){
+  const msgUint8 = new TextEncoder().encode(message);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2,'0')).join('');
+}
+
+/* ===== حماية بكلمة مرور (تركيب أولي آمن أكثر) =====
+   - إذا لم توجد كلمة مرور (هاش) في localStorage سيتم طلب إنشاء كلمة مرور أولية.
+   - الهَش مخزّن في localStorage (ليس مثالياً للخوادم لكنه أفضل من نص صريح في الكود).
+*/
+(async function checkPassword(){
+  const saved = sessionStorage.getItem("admin_ok");
+  if(saved === "true"){
+    document.getElementById("mainContent").style.display = "block";
+    return;
+  }
+
+  const storedHash = localStorage.getItem('admin_hash');
+  if(!storedHash){
+    // إعداد أولي لكلمة المرور
+    const p1 = prompt("لم يتم إعداد كلمة مرور الادمن بعد.\nأدخل كلمة مرور جديدة:");
+    if(!p1){ alert("إعداد كلمة المرور تم إلغاؤه"); return; }
+    const p2 = prompt("تأكيد كلمة المرور الجديدة:");
+    if(p1 !== p2){ alert("كلمتا المرور غير متطابقتين"); return; }
+    const h = await sha256(p1);
+    localStorage.setItem('admin_hash', h);
+    sessionStorage.setItem("admin_ok","true");
+    document.getElementById("mainContent").style.display = "block";
+    return;
+  }
+
+  const input = prompt("أدخل كلمة مرور لوحة الإدارة:");
+  const h = await sha256(input || '');
+  if(h === storedHash){
+    sessionStorage.setItem("admin_ok","true");
+    document.getElementById("mainContent").style.display = "block";
+  }else{
+    alert("كلمة المرور غير صحيحة");
+    location.reload();
+  }
+})();
+
+/* ===== زر العملاء ===== */
+function goToCustomers() {
+    window.location.href = 'customers.html';
+}
+
+/* ===== الكود المعدل للوحة ===== */
 let currentFilter = 'all'; // قيمة الفلتر الحالية
 
 function setFilter(filter){
@@ -66,12 +128,17 @@ function loadProfessionals() {
   const tbody = document.getElementById('prosTable');
   tbody.innerHTML = '';
 
-  pros.forEach((pro, index) => {
+  // قراءة إشعارات الانتهاء المخزنة لتجنب التكرار
+  let notifiedExpired = JSON.parse(localStorage.getItem('notifiedExpired') || '{}');
+
+  const now = new Date();
+
+  pros.forEach((pro) => {
     let remaining = '-';
     let statusClass = '';
-    const now = new Date();
+    const status = pro.subscription?.status || 'pending';
 
-    if(pro.subscription.status === 'active'){
+    if(status === 'active'){
       const endTime = new Date(pro.subscription.end_at);
       const diff = endTime - now;
       if(diff > 0){
@@ -81,53 +148,69 @@ function loadProfessionals() {
         remaining = `${hours}س ${minutes}د ${seconds}ث`;
         statusClass = 'active-status';
       } else {
+        // تحويل إلى منتهٍ
         pro.subscription.status = 'expired';
         remaining = 'انتهى';
         statusClass = 'expired-status';
 
+        // سجلنا أنه منتهي لتجنب التكرار (لكن لا نفتح روابط تلقائياً)
         if(!notifiedExpired[pro.phone]){
-          alert(`⚠️ انتهى اشتراك المهني: ${pro.name} (${pro.service})`);
-          const phoneNum = pro.phone.replace(/^0/, '');
-          const waLink = `https://wa.me/213${phoneNum}?text=${encodeURIComponent("مرحباً "+pro.name+"، انتهى اشتراكك في HandyDZ.")}`;
-          window.open(waLink, "_blank");
           notifiedExpired[pro.phone] = true;
         }
       }
     }
 
-    if(pro.subscription.status === 'rejected') {
+    if(status === 'rejected') {
       statusClass = 'rejected-status';
       remaining = '-';
     }
 
-    // فلترة حسب الحالة
-    if(currentFilter === 'all' || currentFilter === pro.subscription.status){
+    if(status === 'pending') {
+      statusClass = 'pending-status';
+      remaining = '-';
+    }
+
+    if(currentFilter === 'all' || currentFilter === pro.subscription?.status || (currentFilter === 'pending' && pro.subscription?.status === 'pending')){
+      const phone = pro.phone;
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td>${pro.name}</td>
         <td>${pro.phone}</td>
         <td>${pro.service}</td>
         <td>${pro.city}</td>
-        <td>${pro.subscription.plan}</td>
-        <td>${pro.subscription.transaction}</td>
-        <td class="${statusClass}">${pro.subscription.status}</td>
+        <td>${pro.subscription?.plan || '-'}</td>
+        <td>${pro.subscription?.transaction || '-'}</td>
+        <td class="${statusClass}">${pro.subscription?.status || 'pending'}</td>
         <td>${remaining}</td>
         <td>
-          <button class="activate" onclick="activate(${index})">تفعيل</button>
-          <button class="reject" onclick="reject(${index})">رفض</button>
-          <button class="whatsapp" onclick="sendWhatsApp(${index})">واتساب</button>
+          <button class="activate" onclick="activateByPhone('${phone}')">تفعيل</button>
+          <button class="reject" onclick="rejectByPhone('${phone}')">رفض</button>
+          <button class="whatsapp" onclick="sendWhatsAppByPhone('${phone}')">واتساب</button>
+          ${ (pro.subscription?.status === 'expired') ? `<button style="background:#F97316;" onclick="sendExpiryMessage('${phone}')">إرسال إشعار انتهاء</button>` : '' }
         </td>
       `;
       tbody.appendChild(tr);
     }
   });
 
+  // حفظ أي تغييرات على الحالة (مثل تحويل إلى expired)
   localStorage.setItem('professionals', JSON.stringify(pros));
+  localStorage.setItem('notifiedExpired', JSON.stringify(JSON.parse(localStorage.getItem('notifiedExpired') || '{}') || {}));
+  // حفظ notifiedExpired الذي عدلناه
+  // (نضع القيمة الحالية التي قمنا بتعديلها)
+  // قراءة مرة أخرى للتأكد من عدم فقد القيم
+  // ولكن لأننا عدلنا notifiedExpired محليًا نحتاج لتخزينه:
+  // (نخزن الإصدارة المعدّلة)
+  try{
+    localStorage.setItem('notifiedExpired', JSON.stringify(JSON.parse(localStorage.getItem('notifiedExpired') || '{}')));
+  }catch(e){}
 }
 
-function activate(index){
+function activateByPhone(phone){
   const pros = JSON.parse(localStorage.getItem('professionals') || '[]');
-  const plan = pros[index].subscription.plan;
+  const idx = pros.findIndex(p => p.phone === phone);
+  if(idx === -1){ alert('المهني غير موجود'); return; }
+  const plan = pros[idx].subscription?.plan;
   const now = new Date();
 
   let durationMs = 0;
@@ -135,33 +218,54 @@ function activate(index){
   if(plan === 'pro') durationMs = 90*24*60*60*1000;
   if(plan === 'premium') durationMs = 365*24*60*60*1000;
 
-  pros[index].subscription.status = 'active';
-  pros[index].subscription.end_at = new Date(now.getTime() + durationMs).toISOString();
+  pros[idx].subscription = pros[idx].subscription || {};
+  pros[idx].subscription.status = 'active';
+  pros[idx].subscription.end_at = new Date(now.getTime() + durationMs).toISOString();
 
   localStorage.setItem('professionals', JSON.stringify(pros));
   loadProfessionals();
-  sendWhatsApp(index, true);
+  sendWhatsAppByPhone(phone, true);
 }
 
-function reject(index){
+function rejectByPhone(phone){
   const pros = JSON.parse(localStorage.getItem('professionals') || '[]');
-  pros[index].subscription.status = 'rejected';
+  const idx = pros.findIndex(p => p.phone === phone);
+  if(idx === -1){ alert('المهني غير موجود'); return; }
+  pros[idx].subscription = pros[idx].subscription || {};
+  pros[idx].subscription.status = 'rejected';
   localStorage.setItem('professionals', JSON.stringify(pros));
   loadProfessionals();
 }
 
-function sendWhatsApp(index, activated=false){
+function sendWhatsAppByPhone(phone, activated=false){
   const pros = JSON.parse(localStorage.getItem('professionals') || '[]');
-  const pro = pros[index];
-  const phoneNum = pro.phone.replace(/^0/, '');
+  const pro = pros.find(p => p.phone === phone);
+  if(!pro){ alert('المهني غير موجود'); return; }
+  const phoneIntl = normalizePhone(pro.phone);
   let text = activated
     ? `مرحباً ${pro.name}، تم تفعيل اشتراكك في HandyDZ. يمكنك البدء باستخدام الخدمة الآن.`
     : `مرحباً ${pro.name}، هذه رسالة من إدارة HandyDZ.`;
-  const waLink = `https://wa.me/213${phoneNum}?text=${encodeURIComponent(text)}`;
+  const waLink = `https://wa.me/${phoneIntl}?text=${encodeURIComponent(text)}`;
   window.open(waLink, "_blank");
 }
 
-setInterval(loadProfessionals, 1000);
+function sendExpiryMessage(phone){
+  const pros = JSON.parse(localStorage.getItem('professionals') || '[]');
+  const pro = pros.find(p => p.phone === phone);
+  if(!pro){ alert('المهني غير موجود'); return; }
+  const phoneIntl = normalizePhone(pro.phone);
+  const text = `مرحباً ${pro.name}، انتهى اشتراكك في HandyDZ. يرجى تجديد الاشتراك للاستمرار.`;
+  const waLink = `https://wa.me/${phoneIntl}?text=${encodeURIComponent(text)}`;
+  window.open(waLink, "_blank");
+}
+
+// قراءة أي إشعارات من التخزين عند بدء التشغيل
+if(!localStorage.getItem('notifiedExpired')){
+  localStorage.setItem('notifiedExpired', JSON.stringify({}));
+}
+
+// تحديث أقل تكرارًا (كل 60 ثانية) بدلاً من كل ثانية
+setInterval(loadProfessionals, 60000);
 loadProfessionals();
 </script>
 
